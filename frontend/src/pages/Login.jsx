@@ -11,12 +11,23 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
 
+  const [emailTouched, setEmailTouched] = useState(false)
+  const isEmailValid = !email || /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email.trim())
+
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
+
+    const trimmedEmail = email.trim()
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
+    if (!emailRegex.test(trimmedEmail)) {
+      setError('Please enter a valid email address format (e.g. name@example.com)')
+      return
+    }
+
     setLoading(true)
     try {
-      const data = await api.login({ email, password })
+      const data = await api.login({ email: trimmedEmail, password })
       api.setToken(data.access_token)
       navigate('/')
     } catch (err) {
@@ -206,10 +217,23 @@ export default function Login() {
                   type="email"
                   required
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value)
+                    if (error) setError('')
+                  }}
+                  onBlur={() => setEmailTouched(true)}
                   placeholder="name@example.com"
-                  className="w-full px-3.5 py-2.5 rounded-lg text-sm bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                  className={`w-full px-3.5 py-2.5 rounded-lg text-sm bg-slate-50 dark:bg-slate-800/60 border ${
+                    emailTouched && !isEmailValid
+                      ? 'border-red-500 dark:border-red-500 focus:ring-red-500'
+                      : 'border-slate-200 dark:border-slate-700/80 focus:ring-indigo-500'
+                  } text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:border-transparent transition`}
                 />
+                {emailTouched && !isEmailValid && (
+                  <p className="text-[11px] text-red-500 dark:text-red-400 mt-1 font-medium">
+                    Please enter a valid email address (e.g. name@example.com)
+                  </p>
+                )}
               </div>
 
               <div>
