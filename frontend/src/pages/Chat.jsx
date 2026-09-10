@@ -6,6 +6,19 @@ import MessageBubble from '../components/MessageBubble.jsx'
 import RetrievalDebugPanel from '../components/RetrievalDebugPanel.jsx'
 import AdminDashboard from '../components/AdminDashboard.jsx'
 import UserDashboard from '../components/UserDashboard.jsx'
+import { ThemeToggle } from '../lib/theme.jsx'
+import {
+  FileTextIcon,
+  FolderIcon,
+  CpuIcon,
+  ShieldIcon,
+  BarChartIcon,
+  LogoIcon,
+  ArrowUpIcon,
+  ArrowRightIcon,
+  CloseIcon,
+  AlertCircleIcon,
+} from '../components/Icons.jsx'
 
 export default function Chat() {
   const navigate = useNavigate()
@@ -51,7 +64,12 @@ export default function Chat() {
     refreshUser()
     refreshDocuments()
     refreshSessions()
-    api.getModels().then(setModels).catch(() => {})
+    api.getModels().then((m) => {
+      setModels(m)
+      if (m && m.length > 0 && !m.some((x) => x.id === selectedModel)) {
+        setSelectedModel(m[0].id)
+      }
+    }).catch(() => {})
   }, [refreshUser, refreshDocuments, refreshSessions])
 
   // Setup beforeunload beacon to erase files or guest account on tab close
@@ -115,14 +133,13 @@ export default function Chat() {
   }
 
   async function handleEndSession() {
-    if (confirm("End current session? All uploaded files and vector embeddings will be erased from PostgreSQL to save storage. Your chat history and question answers will be preserved.")) {
+    if (confirm("End current session? All uploaded files and vector embeddings will be erased from PostgreSQL to preserve free storage. Your conversation questions and answers will remain safely saved in history.")) {
       try {
         await api.cleanupSessionFiles()
         setActiveDocumentId(null)
         refreshDocuments()
-        alert("Session files cleared. Conversation history preserved.")
       } catch (err) {
-        alert(err.message || "Failed to clear session files")
+        alert(err.message || "Failed to purge session files")
       }
     }
   }
@@ -159,7 +176,7 @@ export default function Chat() {
       refreshSessions()
       refreshUser()
     } catch (err) {
-      setMessages((m) => [...m, { role: 'assistant', content: `⚠️ ${err.message}`, id: `e-${Date.now()}` }])
+      setMessages((m) => [...m, { role: 'assistant', content: err.message || 'An error occurred during retrieval.', id: `e-${Date.now()}` }])
     } finally {
       setSending(false)
     }
@@ -173,9 +190,17 @@ export default function Chat() {
   const isAdmin = user?.role === 'admin' || user?.is_admin
   const isGuest = user?.is_guest
   const guestCount = user?.guest_query_count || 0
+  const activeDoc = activeDocumentId ? documents.find((d) => d.id === activeDocumentId) : null
+
+  const starterPrompts = [
+    "Summarize the key findings and executive summary",
+    "Extract all quantitative metrics, numbers, and tables",
+    "What are the main conclusions and recommendations?",
+    "List the critical action items and next steps",
+  ]
 
   return (
-    <div className="flex h-screen bg-ink">
+    <div className="flex h-screen bg-slate-50 dark:bg-[#080c14] text-slate-900 dark:text-slate-100 transition-colors duration-200 overflow-hidden">
       <Sidebar
         documents={documents}
         sessions={sessions}
@@ -191,125 +216,184 @@ export default function Chat() {
         onLogout={handleLogout}
       />
 
-      <main className="flex-1 flex flex-col min-w-0">
+      <main className="flex-1 flex flex-col min-w-0 h-screen bg-slate-50/50 dark:bg-[#080c14] relative">
         {/* Top Header Bar */}
-        <header className="border-b border-line px-6 py-2.5 flex items-center justify-between gap-4 bg-panel">
+        <header className="border-b border-slate-200 dark:border-slate-800/80 px-6 py-3 flex items-center justify-between gap-4 bg-white/90 dark:bg-[#0b0f19]/90 backdrop-blur-md z-10">
           <div className="flex items-center gap-3 min-w-0">
-            <div>
-              <div className="font-display font-semibold text-text text-sm truncate">
-                {activeDocumentId
-                  ? documents.find((d) => d.id === activeDocumentId)?.filename || 'Chat'
-                  : 'All documents'}
+            {activeDoc ? (
+              <div className="flex items-center gap-2 px-3 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200/70 dark:border-indigo-800/60 max-w-sm">
+                <FileTextIcon className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-300 truncate">
+                  {activeDoc.filename}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setActiveDocumentId(null)}
+                  title="Remove document filter (query all)"
+                  className="text-xs text-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-200 ml-1 p-0.5"
+                >
+                  <CloseIcon className="w-3 h-3" />
+                </button>
               </div>
-              <div className="text-[10px] font-mono text-muted">
-                Hybrid RAG · RRF (k=60) · BGE Reranker
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="flex items-center gap-1.5 text-xs font-bold text-slate-800 dark:text-slate-200">
+                  <FolderIcon className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+                  <span>All Documents</span>
+                </span>
+                <span className="hidden sm:inline-block text-[11px] font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full border border-slate-200/60 dark:border-slate-700/60">
+                  Hybrid RRF (k=60) + BGE Reranker
+                </span>
               </div>
-            </div>
+            )}
           </div>
 
-          {/* Model Selector & Action Controls */}
-          <div className="flex items-center gap-2.5 shrink-0">
-            {/* Model Dropdown */}
-            <div className="flex items-center gap-1.5 bg-panel-2 border border-line rounded-lg px-2 py-1">
-              <span className="text-[10px] font-mono text-muted uppercase">Model:</span>
+          {/* Controls Cluster */}
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            {/* Model Selector Dropdown */}
+            <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 rounded-lg px-2.5 py-1.5 shadow-2xs">
+              <CpuIcon className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400 shrink-0" />
               <select
                 value={selectedModel}
                 onChange={(e) => setSelectedModel(e.target.value)}
-                className="bg-transparent text-xs text-amber font-mono font-medium focus:outline-none cursor-pointer"
+                className="bg-transparent text-xs text-slate-700 dark:text-slate-200 font-semibold focus:outline-none cursor-pointer"
               >
                 {models.map((m) => (
-                  <option key={m.id} value={m.id} className="bg-panel text-text">
+                  <option key={m.id} value={m.id} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">
                     {m.name}
                   </option>
                 ))}
               </select>
             </div>
 
-            {/* Guest Banner */}
+            {/* Guest Counter Badge */}
             {isGuest && (
-              <div className="flex items-center gap-1.5 bg-amber/10 border border-amber/30 rounded-lg px-2.5 py-1 text-xs font-mono text-amber">
-                <span>Guest: {guestCount}/4 queries</span>
-                <Link to="/register" className="underline font-semibold hover:brightness-110 ml-1">
+              <div className="flex items-center gap-1.5 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800/60 rounded-lg px-2.5 py-1.5 text-xs text-amber-700 dark:text-amber-300">
+                <span className="font-semibold">Guest: {guestCount}/4 queries</span>
+                <Link to="/register" className="font-bold underline hover:brightness-110 ml-1">
                   Sign up
                 </Link>
               </div>
             )}
 
-            {/* Session Cleanup button (erase files from DB) */}
+            {/* Purge Files Button */}
             {documents.length > 0 && (
               <button
+                type="button"
                 onClick={handleEndSession}
-                className="text-[11px] font-mono text-muted hover:text-red-400 bg-panel-2 border border-line rounded-lg px-2.5 py-1 transition-colors"
-                title="Erase uploaded files & vector embeddings from PostgreSQL to save storage quota. Conversations remain preserved."
+                title="Erase uploaded files and vector chunks from PostgreSQL to save storage. Questions and answers are preserved."
+                className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 hover:text-red-600 dark:hover:text-red-400 transition cursor-pointer"
               >
-                Purge Files
+                <ShieldIcon className="w-3.5 h-3.5 text-slate-500" />
+                <span>Purge Files</span>
               </button>
             )}
 
-            {/* Profile / Tokens Dashboard Button */}
+            {/* User Profile Stats Button */}
             <button
+              type="button"
               onClick={() => setProfileOpen(true)}
-              className="text-xs font-mono text-text bg-panel-2 border border-line hover:border-amber/50 rounded-lg px-2.5 py-1 transition-colors"
-              title="View my token consumption and statistics"
+              title="View your token analytics and profile"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 hover:bg-slate-200 dark:hover:bg-slate-700 transition cursor-pointer shadow-2xs"
             >
-              Stats
+              <BarChartIcon className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+              <span>Usage</span>
             </button>
 
             {/* Admin Console Button */}
             {isAdmin && (
               <button
+                type="button"
                 onClick={() => setAdminOpen(true)}
-                className="text-xs font-mono bg-amber/20 border border-amber text-amber font-medium rounded-lg px-2.5 py-1 hover:brightness-110 transition"
+                className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800 hover:brightness-105 transition cursor-pointer shadow-2xs"
               >
-                Admin Console
+                Admin
               </button>
             )}
+
+            {/* Theme Toggle Button (Light/Dark) */}
+            <ThemeToggle />
           </div>
         </header>
 
-        {/* Message Area */}
-        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4">
+        {/* Message Conversation Area */}
+        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
           {messages.length === 0 && (
-            <div className="h-full flex flex-col items-center justify-center text-center text-muted">
-              <div className="font-mono text-xs tracking-[0.3em] text-amber uppercase mb-2">ready</div>
-              <h3 className="font-display text-lg font-medium text-text mb-1">Upload a Document & Ask Questions</h3>
-              <p className="max-w-md text-xs leading-relaxed text-muted">
-                Upload a PDF or DOCX to start. Every response displays exact BM25, Vector, RRF, and Cross-Encoder scores.
-                When your session ends, vector embeddings are automatically deleted from PostgreSQL to maintain $0 free tier storage!
+            <div className="h-full flex flex-col items-center justify-center text-center max-w-xl mx-auto py-12">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-purple-600 text-white flex items-center justify-center shadow-lg shadow-indigo-600/25 mb-4">
+                <LogoIcon className="w-6 h-6 text-white" />
+              </div>
+
+              <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+                How can I assist your document research?
+              </h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+                Upload a document in the sidebar, or select a starter prompt below. Every response highlights exact chunk sources, BM25 scores, cosine similarity, and BGE rerank rankings.
               </p>
-            </div>
-          )}
-          {messages.map((m) => (
-            <MessageBubble key={m.id} message={m} onInspect={setDebugSources} />
-          ))}
-          {sending && (
-            <div className="flex justify-start">
-              <div className="bg-panel border border-line rounded-xl px-4 py-3 text-xs font-mono text-muted pulse-dot">
-                retrieving · reranking · generating via {selectedModel}…
+
+              {/* Starter Prompt Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full mt-8 text-left">
+                {starterPrompts.map((prompt, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setInput(prompt)}
+                    className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800/80 bg-white/70 dark:bg-slate-900/60 hover:border-indigo-400 dark:hover:border-indigo-600/70 hover:bg-indigo-50/30 dark:hover:bg-indigo-950/20 text-xs text-slate-700 dark:text-slate-300 transition duration-150 cursor-pointer shadow-2xs flex items-center justify-between group"
+                  >
+                    <span>{prompt}</span>
+                    <ArrowRightIcon className="w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 shrink-0 ml-2 transition-transform group-hover:translate-x-0.5" />
+                  </button>
+                ))}
               </div>
             </div>
           )}
+
+          {messages.map((m) => (
+            <MessageBubble key={m.id} message={m} onInspect={setDebugSources} />
+          ))}
+
+          {sending && (
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <LogoIcon className="w-4 h-4 text-white" />
+              </div>
+              <div className="px-4 py-3 rounded-2xl rounded-tl-sm bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2 shadow-xs">
+                <div className="w-4 h-4 border-2 border-indigo-600 dark:border-indigo-400 border-t-transparent rounded-full animate-spin" />
+                <span>Retrieving, reranking, and generating via <strong>{selectedModel}</strong>…</span>
+              </div>
+            </div>
+          )}
+
           <div ref={bottomRef} />
         </div>
 
-        {/* Question Input Form */}
-        <form onSubmit={handleSend} className="border-t border-line p-4 flex gap-2 bg-panel">
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask something about your document…"
-            className="flex-1 bg-panel-2 border border-line rounded-lg px-4 py-2.5 text-sm text-text focus:outline-none focus:border-amber transition-colors"
-          />
-          <button
-            type="submit"
-            disabled={sending || (isGuest && guestCount >= 4)}
-            className="bg-amber text-ink text-sm font-medium rounded-lg px-5 py-2.5 hover:brightness-110 transition disabled:opacity-50"
-          >
-            Send
-          </button>
-        </form>
+        {/* Input Bar */}
+        <div className="p-4 border-t border-slate-200 dark:border-slate-800/80 bg-white/95 dark:bg-[#0b0f19]/95 backdrop-blur-md">
+          <form onSubmit={handleSend} className="max-w-4xl mx-auto relative flex items-center">
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder={activeDoc ? `Ask a question about ${activeDoc.filename}…` : "Ask a question about your uploaded documents…"}
+              disabled={isGuest && guestCount >= 4}
+              className="w-full pl-4 pr-24 py-3.5 rounded-xl text-sm bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition shadow-inner"
+            />
+            <button
+              type="submit"
+              disabled={sending || !input.trim() || (isGuest && guestCount >= 4)}
+              className="absolute right-2 top-2 bottom-2 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition duration-150 shadow-sm shadow-indigo-600/20 disabled:opacity-40 disabled:pointer-events-none cursor-pointer flex items-center gap-1.5"
+            >
+              <span>Send</span>
+              <ArrowUpIcon className="w-3.5 h-3.5" />
+            </button>
+          </form>
+          <div className="max-w-4xl mx-auto mt-2 flex items-center justify-between text-[11px] text-slate-400 dark:text-slate-500 px-1">
+            <span>Press <strong>Enter</strong> to send • Ephemeral RAG</span>
+            <span>Fast Groq Inference • Free pgvector</span>
+          </div>
+        </div>
       </main>
 
+      {/* Retrieval Debug Panel Drawer */}
       <RetrievalDebugPanel
         sources={debugSources}
         open={!!debugSources}
@@ -324,4 +408,3 @@ export default function Chat() {
     </div>
   )
 }
-
