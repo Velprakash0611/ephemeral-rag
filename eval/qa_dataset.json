@@ -1,0 +1,20 @@
+[
+  {
+    "id": "q1",
+    "question": "What is the refund policy time window mentioned in the document?",
+    "expected_keywords": ["refund", "days", "policy"],
+    "notes": "Replace with a real question about YOUR uploaded document before running eval."
+  },
+  {
+    "id": "q2",
+    "question": "Summarize the main responsibilities described in section 2.",
+    "expected_keywords": ["responsibilities", "section"],
+    "notes": "Structure-aware chunking should retrieve the correct section heading's chunk."
+  },
+  {
+    "id": "q3",
+    "question": "What numeric values appear in the pricing table?",
+    "expected_keywords": ["price", "table", "$"],
+    "notes": "Tests table-extraction: should retrieve an element_type == 'table' chunk."
+  }
+]
