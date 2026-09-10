@@ -158,6 +158,27 @@ def login(payload: schemas.UserLogin, db: Session = Depends(get_db)):
     }
 
 
+def _purge_user_completely(db: Session, user: models.User):
+    """Safely and atomically deletes a user and all child entities with synchronize_session=False to avoid SAWarning."""
+    user_id = user.id
+    user_email = user.email
+
+    db.query(models.ActivityLog).filter(models.ActivityLog.user_id == user_id).delete(synchronize_session=False)
+    db.query(models.Chunk).filter(models.Chunk.user_id == user_id).delete(synchronize_session=False)
+    db.query(models.Document).filter(models.Document.user_id == user_id).delete(synchronize_session=False)
+
+    session_ids = [s.id for s in db.query(models.ChatSession.id).filter(models.ChatSession.user_id == user_id).all()]
+    if session_ids:
+        db.query(models.ChatMessage).filter(models.ChatMessage.session_id.in_(session_ids)).delete(synchronize_session=False)
+        db.query(models.ChatSession).filter(models.ChatSession.id.in_(session_ids)).delete(synchronize_session=False)
+
+    if user_email:
+        db.query(models.EmailVerification).filter(models.EmailVerification.email == user_email).delete(synchronize_session=False)
+
+    db.query(models.User).filter(models.User.id == user_id).delete(synchronize_session=False)
+    db.commit()
+
+
 @router.post("/logout")
 def logout(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     """
@@ -167,14 +188,12 @@ def logout(current_user: models.User = Depends(get_current_user), db: Session = 
       and deletes all uploaded documents and chunks to save free DB storage.
     """
     if current_user.is_guest:
-        db.delete(current_user)  # Cascades to documents, chunks, sessions, messages
-        db.commit()
+        _purge_user_completely(db, current_user)
         return {"status": "guest_purged"}
 
     # Erase uploaded documents and chunks for registered user
-    docs = db.query(models.Document).filter(models.Document.user_id == current_user.id).all()
-    for d in docs:
-        db.delete(d)  # Cascades to chunks
+    db.query(models.Chunk).filter(models.Chunk.user_id == current_user.id).delete(synchronize_session=False)
+    db.query(models.Document).filter(models.Document.user_id == current_user.id).delete(synchronize_session=False)
     db.commit()
     return {"status": "session_files_purged"}
 
@@ -183,8 +202,7 @@ def logout(current_user: models.User = Depends(get_current_user), db: Session = 
 def guest_cleanup(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Erases ephemeral guest account and data when browser window is closed or guest exits."""
     if current_user.is_guest:
-        db.delete(current_user)
-        db.commit()
+        _purge_user_completely(db, current_user)
         return {"status": "guest_purged"}
     return {"status": "ignored"}
 
@@ -204,21 +222,9 @@ def delete_account(current_user: models.User = Depends(get_current_user), db: Se
     - Email verification records
     - User account record
     """
-    user_id = current_user.id
-    user_email = current_user.email
-
-    # 1. Purge all chunks owned by this user
-    db.query(models.Chunk).filter(models.Chunk.user_id == user_id).delete(synchronize_session=False)
-
-    # 2. Purge email verification records for this user
-    if user_email:
-        db.query(models.EmailVerification).filter(models.EmailVerification.email == user_email).delete(synchronize_session=False)
-
-    # 3. Delete the user record (cascades to documents, chat_sessions, chat_messages, activity_logs)
-    db.delete(current_user)
-    db.commit()
-
+    _purge_user_completely(db, current_user)
     return {"status": "account_deleted", "message": "Your account and all associated data have been permanently deleted."}
+
 
 
 @router.get("/dashboard", response_model=schemas.UserDashboardOut)

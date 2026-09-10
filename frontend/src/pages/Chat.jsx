@@ -19,7 +19,7 @@ export default function Chat() {
   const [sending, setSending] = useState(false)
   const [debugSources, setDebugSources] = useState(null)
   const [models, setModels] = useState([])
-  const [selectedModel, setSelectedModel] = useState('llama-3.1-8b-instant')
+  const [selectedModel, setSelectedModel] = useState('openai/gpt-oss-20b')
   const [adminOpen, setAdminOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const bottomRef = useRef(null)

@@ -26,10 +26,14 @@ class Settings(BaseSettings):
     # Guest user limits
     GUEST_MAX_QUERIES: int = 4
 
-    # LLM (any OpenAI-compatible open-source LLM endpoint)
-    LLM_API_BASE: str = "https://api.groq.com/openai/v1"
+    # LLM (Native Groq Cloud Inference)
+    GROQ_API_KEY: str = ""
     LLM_API_KEY: str = ""
-    LLM_MODEL: str = "llama-3.1-8b-instant"
+    LLM_MODEL: str = "openai/gpt-oss-20b"
+
+    @property
+    def groq_key(self) -> str:
+        return (self.GROQ_API_KEY.strip() if self.GROQ_API_KEY else "") or (self.LLM_API_KEY.strip() if self.LLM_API_KEY else "")
 
     # Embeddings & Reranker (top-tier open source models, run locally at $0 cost)
     EMBEDDING_MODEL: str = "BAAI/bge-small-en-v1.5"

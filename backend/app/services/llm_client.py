@@ -1,22 +1,19 @@
 """
-Thin wrapper around any OpenAI-compatible open-source LLM endpoint.
-
-Default configured for Groq (free tier, fast inference of open-source
-models like Llama 3.1). Swappable to Together/OpenRouter/Ollama/vLLM by
-changing LLM_API_BASE / LLM_API_KEY / LLM_MODEL in .env -- no code changes.
+Native Groq Cloud open-source LLM client (100% free tier).
+Provides fast inference across open-source models:
+Llama 3.1 8B, Llama 3.3 70B, Mixtral 8x7B, Gemma 2 9B, DeepSeek R1 Distill.
 """
 import time
 import logging
-from openai import OpenAI, RateLimitError, APIError, APITimeoutError, AuthenticationError
+from groq import Groq, RateLimitError, APIError, APITimeoutError, AuthenticationError
 from app.config import settings
 
 logger = logging.getLogger(__name__)
 
 
-def get_llm_client() -> OpenAI:
-    api_key = settings.LLM_API_KEY.strip() if settings.LLM_API_KEY else "not-needed"
-    return OpenAI(
-        base_url=settings.LLM_API_BASE,
+def get_llm_client() -> Groq:
+    api_key = settings.groq_key or "not-needed"
+    return Groq(
         api_key=api_key,
         timeout=30.0,
     )
@@ -58,39 +55,40 @@ def build_prompt(question: str, context_chunks: list[dict]) -> list[dict]:
     ]
 
 
+import re
+
 AVAILABLE_MODELS = [
     {
+        "id": "openai/gpt-oss-20b",
+        "name": "GPT-OSS 20B",
+        "description": "Fast & highly accurate open weights model (Default)",
+    },
+    {
+        "id": "groq/compound-mini",
+        "name": "Groq Compound Mini",
+        "description": "Ultra-fast direct inference",
+    },
+    {
+        "id": "openai/gpt-oss-120b",
+        "name": "GPT-OSS 120B",
+        "description": "Flagship 120B open reasoning model",
+    },
+    {
+        "id": "qwen/qwen3.6-27b",
+        "name": "Qwen 3.6 27B",
+        "description": "Multilingual open reasoning model",
+    },
+    {
         "id": "llama-3.1-8b-instant",
-        "name": "Llama 3.1 8B Instant",
-        "description": "Ultra-fast & lightweight (Default)",
-    },
-    {
-        "id": "llama-3.3-70b-versatile",
-        "name": "Llama 3.3 70B Versatile",
-        "description": "High-accuracy flagship open model",
-    },
-    {
-        "id": "mixtral-8x7b-32768",
-        "name": "Mixtral 8x7B",
-        "description": "MoE model with 32k context window",
-    },
-    {
-        "id": "gemma2-9b-it",
-        "name": "Gemma 2 9B",
-        "description": "Google lightweight instruction-tuned model",
-    },
-    {
-        "id": "deepseek-r1-distill-llama-70b",
-        "name": "DeepSeek R1 Distill 70B",
-        "description": "Advanced reasoning & chain-of-thought",
+        "name": "Llama 3.1 8B",
+        "description": "Meta Llama (if enabled on account)",
     },
 ]
 
 
 def generate_answer(question: str, context_chunks: list[dict], model_name: str | None = None) -> tuple[str, dict]:
     """
-    Calls the OpenAI-compatible LLM endpoint (Groq / Ollama / etc.)
-    with retry on rate limits and returns (answer, token_usage_dict).
+    Calls the native Groq LLM endpoint with retry on rate limits and returns (answer, token_usage_dict).
     """
     client = get_llm_client()
     messages = build_prompt(question, context_chunks)
@@ -107,6 +105,8 @@ def generate_answer(question: str, context_chunks: list[dict], model_name: str |
                 max_tokens=800,
             )
             content = response.choices[0].message.content.strip()
+            # Strip reasoning model <think>...</think> tags if present
+            content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
 
             usage = default_usage.copy()
             if hasattr(response, "usage") and response.usage:
