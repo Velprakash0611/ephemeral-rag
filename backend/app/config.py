@@ -1,5 +1,16 @@
 from pathlib import Path
-from pydantic_settings import BaseSettings, SettingsConfigDict
+
+try:
+    from pydantic_settings import BaseSettings, SettingsConfigDict
+except ImportError:
+    try:
+        from pydantic import BaseSettings
+        SettingsConfigDict = None
+    except ImportError:
+        raise ImportError(
+            "pydantic-settings is not installed in the current environment. "
+            "Please run: pip install pydantic-settings"
+        )
 
 
 class Settings(BaseSettings):
@@ -16,13 +27,19 @@ class Settings(BaseSettings):
     ADMIN_USERNAME: str = ""
     ADMIN_PASSWORD: str = ""
 
-    # Email Service for 100% Free OTP (Resend free tier or SMTP)
+    # Email Service for 100% Free OTP (Brevo HTTPS API, Resend, or SMTP)
+    BREVO_API_KEY: str = ""
+    BREVO_SENDER_EMAIL: str = ""
     RESEND_API_KEY: str = ""
     EMAIL_FROM: str = "Ephemeral RAG <onboarding@resend.dev>"
     SMTP_HOST: str = ""
     SMTP_PORT: int = 587
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
+
+    @property
+    def brevo_key(self) -> str:
+        return (self.BREVO_API_KEY or "").strip().strip('"').strip("'")
 
     @property
     def resend_key(self) -> str:
@@ -52,14 +69,25 @@ class Settings(BaseSettings):
     TOP_K_CHUNKS: int = 6
     ALLOWED_ORIGINS: str = "*"
 
-    model_config = SettingsConfigDict(
-        env_file=[
-            str(Path(__file__).resolve().parent.parent / ".env"),
-            str(Path(__file__).resolve().parent.parent.parent / ".env"),
-            ".env",
-        ],
-        extra="ignore",
-    )
+    if SettingsConfigDict is not None:
+        model_config = SettingsConfigDict(
+            env_file=[
+                str(Path(__file__).resolve().parent.parent / ".env"),
+                str(Path(__file__).resolve().parent.parent.parent / ".env"),
+                ".env",
+            ],
+            env_file_encoding="utf-8",
+            extra="ignore",
+        )
+    else:
+        class Config:
+            env_file = [
+                str(Path(__file__).resolve().parent.parent / ".env"),
+                str(Path(__file__).resolve().parent.parent.parent / ".env"),
+                ".env",
+            ]
+            env_file_encoding = "utf-8"
+            extra = "ignore"
 
 
 settings = Settings()

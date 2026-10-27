@@ -20,9 +20,10 @@ def generate_otp() -> str:
 def send_otp_email(to_email: str, otp_code: str) -> bool:
     """
     Sends the 6-digit verification code via:
-    1. Resend REST API (100 free emails/day at $0 cost), or
-    2. Standard SMTP (Gmail, Brevo, SendGrid), or
-    3. Console logging fallback for local development.
+    1. Brevo HTTPS API (300 free emails/day to ANY recipient, port 443), or
+    2. Resend REST API (100 free emails/day), or
+    3. Standard SMTP (Gmail, Brevo, SendGrid), or
+    4. Console logging fallback for local development.
     """
     subject = f"Ephemeral RAG — Your Verification Code: {otp_code}"
     html_content = f"""
@@ -39,7 +40,52 @@ def send_otp_email(to_email: str, otp_code: str) -> bool:
     </div>
     """
 
-    # 1. Try Resend API ($0 free tier)
+    # 1. Try Brevo HTTPS REST API (Free 300 emails/day, no custom domain required, port 443)
+    if settings.brevo_key:
+        try:
+            url = "https://api.brevo.com/v3/smtp/email"
+            sender_email = (
+                settings.BREVO_SENDER_EMAIL.strip()
+                or settings.SMTP_USER.strip()
+                or (settings.ADMIN_EMAIL.strip() if settings.ADMIN_EMAIL else "")
+                or "velprakash0611@gmail.com"
+            )
+            payload = {
+                "sender": {"name": "Ephemeral RAG", "email": sender_email},
+                "to": [{"email": to_email}],
+                "subject": subject,
+                "htmlContent": html_content,
+                "textContent": f"Your verification code is: {otp_code}",
+            }
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(payload).encode("utf-8"),
+                headers={
+                    "api-key": settings.brevo_key,
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                    "User-Agent": "EphemeralRAG/1.0",
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                if resp.status in (200, 201, 202):
+                    print(f"\n[EMAIL SUCCESS] Verification OTP sent via Brevo to: {to_email}\n")
+                    logger.info(f"OTP email sent successfully via Brevo to {to_email}")
+                    return True
+        except urllib.error.HTTPError as e:
+            raw_err = ""
+            try:
+                raw_err = e.read().decode("utf-8")
+            except Exception:
+                pass
+            print(f"\n[BREVO API ERROR - HTTP {e.code}]: {raw_err or e.reason}")
+            logger.warning(f"Failed to send email via Brevo: HTTP {e.code} - {raw_err}")
+        except Exception as e:
+            print(f"\n[BREVO API ERROR]: {e}")
+            logger.warning(f"Failed to send email via Brevo: {e}")
+
+    # 2. Try Resend API ($0 free tier)
     if settings.resend_key:
         try:
             url = "https://api.resend.com/emails"
