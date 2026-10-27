@@ -1,8 +1,10 @@
-# Contextual — Hybrid RAG Document Q&A
 # Ephemeral RAG — Intelligent Document Q&A
 
-A full end-to-end **Retrieval-Augmented Generation** pipeline: upload a PDF/DOCX,
-ask questions about it, and see exactly how the answer was retrieved and grounded.
+> 🚀 **Live Demo:** [https://ephemeralrag.netlify.app](https://ephemeralrag.netlify.app)  
+> *Try the live application in your browser with instant access (Guest Mode available).*
+
+---
+
 A modern, production-grade **Retrieval-Augmented Generation (RAG)** application engineered for high-precision document intelligence with **zero recurring database costs**. Upload PDF or Word documents, ask complex questions, and inspect the exact multi-stage retrieval pipeline that grounded each response.
 
 Built to demonstrate understanding of the RAG pipeline itself — not as a SaaS
@@ -296,7 +298,7 @@ Frontend application will start at: `http://localhost:5173`.
    - `LLM_MODEL`: `openai/gpt-oss-20b`
    - `ALLOWED_ORIGINS`: Your Netlify frontend domain (or `*` initially).
    - *(Optional email settings)*: `RESEND_API_KEY` or `SMTP_*` variables.
-5. Click **Deploy Web Service** and copy your backend URL (e.g., `https://ephemeral-rag-api.onrender.com`).
+5. Click **Deploy Web Service** and copy your backend URL.
 
 ### Step 2: Deploy Frontend on Netlify
 1. Go to [Netlify Dashboard](https://app.netlify.com) and click **Add new site** -> **Import an existing project**.
@@ -307,13 +309,13 @@ Frontend application will start at: `http://localhost:5173`.
    - **Publish directory**: `dist`
 4. Add the following **Environment Variable** in Netlify:
    - **Key**: `VITE_API_BASE_URL`
-   - **Value**: Your Render backend URL (e.g. `https://ephemeral-rag-api.onrender.com`)
+   - **Value**: Your Render backend URL 
 5. Click **Deploy Site**.
 
 ### Step 3: Complete CORS Handshake
-1. Copy your live Netlify URL (e.g., `https://ephemeral-rag.netlify.app`).
+1. Copy your live Netlify URL.
 2. Return to Render -> Web Service -> **Environment**.
-3. Update `ALLOWED_ORIGINS` to `https://ephemeral-rag.netlify.app`.
+3. Update `ALLOWED_ORIGINS`.
 
 ---
 
