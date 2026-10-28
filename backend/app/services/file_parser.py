@@ -125,7 +125,8 @@ def parse_docx(path: str) -> List[Dict[str, Any]]:
             para = next((p for p in doc.paragraphs if p._p is child), None)
             if para is None or not para.text.strip():
                 continue
-            style_name = (para.style.name or "").lower()
+            style = getattr(para, "style", None)
+            style_name = (style.name or "").lower() if (style and getattr(style, "name", None)) else ""
             if "heading" in style_name or "title" in style_name:
                 current_section = para.text.strip()
                 elements.append({
