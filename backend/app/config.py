@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     # Misc
     UPLOAD_DIR: str = "./uploads"
     MAX_UPLOAD_MB: int = 25
-    TOP_K_CHUNKS: int = 6
+    TOP_K_CHUNKS: int = 4
     ALLOWED_ORIGINS: str = "*"
 
     if SettingsConfigDict is not None:

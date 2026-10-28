@@ -78,6 +78,59 @@ export const api = {
   getMessages: (sessionId) => request(`/chat/sessions/${sessionId}/messages`),
   deleteSession: (sessionId) => request(`/chat/sessions/${sessionId}`, { method: "DELETE" }),
   ask: (payload) => request("/chat/ask", { method: "POST", body: JSON.stringify(payload) }),
+  askStream: async (payload, onDelta, onMeta) => {
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/chat/ask-stream`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      let detail = "Request failed";
+      try {
+        const data = await res.json();
+        detail = data.detail || detail;
+      } catch (_) {}
+      throw new Error(detail);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const blocks = buffer.split("\n\n");
+      buffer = blocks.pop() || "";
+
+      for (const block of blocks) {
+        if (!block.trim()) continue;
+        let event = "message";
+        let dataStr = "";
+        for (const line of block.split("\n")) {
+          if (line.startsWith("event: ")) event = line.slice(7).trim();
+          else if (line.startsWith("data: ")) dataStr = line.slice(6).trim();
+        }
+
+        if (event === "meta" && onMeta) {
+          try { onMeta(JSON.parse(dataStr)); } catch (_) {}
+        } else if (event === "delta" && onDelta) {
+          try {
+            const parsed = JSON.parse(dataStr);
+            onDelta(parsed.text || "");
+          } catch (_) {}
+        } else if (event === "done" && onMeta && dataStr && dataStr !== "[DONE]") {
+          try { onMeta(JSON.parse(dataStr)); } catch (_) {}
+        }
+      }
+    }
+  },
   getModels: () => request("/chat/models"),
 };
 

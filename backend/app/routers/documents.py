@@ -116,7 +116,8 @@ def delete_document(document_id: str, db: Session = Depends(get_db),
         models.Document.id == document_id, models.Document.user_id == current_user.id
     ).first()
     if not doc:
-        raise HTTPException(status_code=404, detail="Document not found")
+        # Idempotent: return deleted gracefully if already purged by session cleanup
+        return {"detail": "deleted"}
     db.delete(doc)  # cascades to chunks
     db.commit()
     return {"detail": "deleted"}

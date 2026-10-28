@@ -152,31 +152,88 @@ export default function Chat() {
     setSending(true)
 
     const optimisticUserMsg = { role: 'user', content: question, id: `tmp-${Date.now()}` }
-    setMessages((m) => [...m, optimisticUserMsg])
+    const assistantMsgId = `a-${Date.now()}`
+
+    setMessages((m) => [
+      ...m,
+      optimisticUserMsg,
+      {
+        role: 'assistant',
+        content: '',
+        document_name: null,
+        tokens_used: null,
+        sources: null,
+        id: assistantMsgId,
+      },
+    ])
 
     try {
-      const res = await api.ask({
-        session_id: activeSessionId,
-        question,
-        document_id: activeDocumentId,
-        model: selectedModel,
-      })
-      setActiveSessionId(res.session_id)
-      setMessages((m) => [
-        ...m,
+      await api.askStream(
         {
-          role: 'assistant',
-          content: res.answer,
-          document_name: res.document_name,
-          tokens_used: res.tokens_used,
-          sources: res.sources,
-          id: `a-${Date.now()}`,
+          session_id: activeSessionId,
+          question,
+          document_id: activeDocumentId,
+          model: selectedModel,
         },
-      ])
+        (delta) => {
+          setMessages((m) =>
+            m.map((msg) =>
+              msg.id === assistantMsgId ? { ...msg, content: (msg.content || '') + delta } : msg
+            )
+          )
+        },
+        (meta) => {
+          if (meta.session_id) setActiveSessionId(meta.session_id)
+          setMessages((m) =>
+            m.map((msg) =>
+              msg.id === assistantMsgId
+                ? {
+                    ...msg,
+                    ...(meta.document_name !== undefined ? { document_name: meta.document_name } : {}),
+                    ...(meta.sources !== undefined ? { sources: meta.sources } : {}),
+                    ...(meta.tokens_used !== undefined ? { tokens_used: meta.tokens_used } : {}),
+                  }
+                : msg
+            )
+          )
+        }
+      )
       refreshSessions()
       refreshUser()
     } catch (err) {
-      setMessages((m) => [...m, { role: 'assistant', content: err.message || 'An error occurred during retrieval.', id: `e-${Date.now()}` }])
+      try {
+        const res = await api.ask({
+          session_id: activeSessionId,
+          question,
+          document_id: activeDocumentId,
+          model: selectedModel,
+        })
+        setActiveSessionId(res.session_id)
+        setMessages((m) =>
+          m.map((msg) =>
+            msg.id === assistantMsgId
+              ? {
+                  role: 'assistant',
+                  content: res.answer,
+                  document_name: res.document_name,
+                  tokens_used: res.tokens_used,
+                  sources: res.sources,
+                  id: assistantMsgId,
+                }
+              : msg
+          )
+        )
+        refreshSessions()
+        refreshUser()
+      } catch (fallbackErr) {
+        setMessages((m) =>
+          m.map((msg) =>
+            msg.id === assistantMsgId
+              ? { role: 'assistant', content: fallbackErr.message || err.message || 'An error occurred during retrieval.', id: assistantMsgId }
+              : msg
+          )
+        )
+      }
     } finally {
       setSending(false)
     }
